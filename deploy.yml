@@ -1,0 +1,52 @@
+name: Notion 일정 반영 후 배포
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # Actions 탭에서 "Run workflow"로 바로 반영
+  schedule:
+    - cron: '*/15 * * * *'  # 15분마다 Notion 확인 (GitHub 사정으로 몇 분 늦을 수 있음)
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 사이트 파일 모으기
+        run: |
+          mkdir _site
+          cp index.html exam.html style.css _site/
+
+      - name: Notion 일정 반영
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: node scripts/sync-notion.mjs _site/exam.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
